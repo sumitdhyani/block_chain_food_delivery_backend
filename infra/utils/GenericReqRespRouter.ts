@@ -41,7 +41,7 @@ export class GenericReqRespRouter<ResponderId, ReqType, ReqId, ReqData, Response
     this.pendingReqIds.add(reqId);
     this.reqRouter.produce(reqType, reqData, (...response: Response) => {
       if (this.pendingReqIds.has(reqId)) {
-        responseHandler(...response);
+        setTimeout(() : void => { responseHandler(...response); }, 0);
         this.pendingReqIds.delete(reqId);
       }
     });

@@ -1,7 +1,6 @@
 import { Kafka, EachMessagePayload } from 'kafkajs';
 
 interface KafkaLibrary {
-  init: () => Promise<void>;
   produce: (topic: string, message: string) => Promise<void>;
   subscribeAsGroupMember: (topics: string[], callback: (message: KafkaMessage) => void) => Promise<void>;
   subscribeAsGroupIndividual: (topics: string[], callback: (message: KafkaMessage) => void) => Promise<void>;
@@ -15,7 +14,10 @@ interface KafkaMessage {
   value: string;
 }
 
-const createKafkaLibrary = (brokers: string[], appId: string, appGroup: string): KafkaLibrary => {
+export const createKafkaLibrary = async (brokers: string[],
+                                  appId: string,
+                                  appGroup: string,
+                                  callback: (methods: KafkaLibrary)=>void): Promise<void> => {
   const kafka = new Kafka({
     clientId: appId,
     brokers: brokers,
@@ -26,16 +28,6 @@ const createKafkaLibrary = (brokers: string[], appId: string, appGroup: string):
 
   const groupMemberSubscriptions = new Set<string>();
   const individualSubscriptions = new Set<string>();
-
-  const init = async (): Promise<void> => {
-    try {
-      await producer.connect();
-      await consumer.connect();
-      console.log('Connected to Kafka cluster');
-    } catch (error) {
-      throw new Error(`Failed to connect to Kafka cluster: ${error.message}`);
-    }
-  };
 
   const produce = async (topic: string, message: string): Promise<void> => {
     try {
@@ -114,13 +106,15 @@ const createKafkaLibrary = (brokers: string[], appId: string, appGroup: string):
     }
   };
 
-  return {
-    init,
-    produce,
-    subscribeAsGroupMember,
-    subscribeAsGroupIndividual,
-    unsubscribe,
-  };
-};
+  try {
+    await producer.connect();
+    await consumer.connect();
+  } catch (error) {
+    throw new Error(`Failed to connect to Kafka cluster: ${error.message}`);
+  }
 
-export default createKafkaLibrary;
+  callback({produce,
+          subscribeAsGroupMember,
+          subscribeAsGroupIndividual,
+          unsubscribe});
+};
