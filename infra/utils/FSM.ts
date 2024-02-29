@@ -296,7 +296,7 @@ const fsm = new Camera()
 try{
     fsm.start()
     fsm.handleEvent("browse")
-    fsm.handleEvent("displayImage", "sample.png")
+    fsm.handleEvent("displayImage", 2)
     fsm.handleEvent("shoot")
     fsm.handleEvent("focus")
     fsm.handleEvent("click")
