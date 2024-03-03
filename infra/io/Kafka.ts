@@ -1,120 +1,105 @@
-import { Kafka, EachMessagePayload } from 'kafkajs';
+import { Kafka, EachMessagePayload } from 'kafkajs'
+import { Callback, MessageCallback, VanillaCallback, QueueUtils, QueueUtilsCallback, ErrCallback, Logger } from '../PublicInterfaces'
+export { ErrCallback, MessageCallback, VanillaCallback } from '../PublicInterfaces'
 
-interface KafkaLibrary {
-  produce: (topic: string, message: string) => Promise<void>;
-  subscribeAsGroupMember: (topics: string[], callback: (message: KafkaMessage) => void) => Promise<void>;
-  subscribeAsGroupIndividual: (topics: string[], callback: (message: KafkaMessage) => void) => Promise<void>;
-  unsubscribe: (topics: string[]) => Promise<void>;
-}
-
-interface KafkaMessage {
-  topic: string;
-  partition: number;
-  offset: string;
-  value: string;
-}
-
-export const createKafkaLibrary = async (brokers: string[],
+export function createKafkaLibrary (brokers: string[],
                                   appId: string,
                                   appGroup: string,
-                                  callback: (methods: KafkaLibrary)=>void): Promise<void> => {
+                                  messageCallback: MessageCallback,
+                                  queueUtilsCallback: QueueUtilsCallback,
+                                  errCallback: ErrCallback,
+                                  logger: Logger): void {
   const kafka = new Kafka({
     clientId: appId,
     brokers: brokers,
-  });
+  })
 
-  const producer = kafka.producer();
-  const consumer = kafka.consumer({ groupId: appId });
+  const producer = kafka.producer()
+  const consumer = kafka.consumer({ groupId: appId })
 
-  const groupMemberSubscriptions = new Set<string>();
-  const individualSubscriptions = new Set<string>();
+  const groupMemberSubscriptions = new Set<string>()
+  const individualSubscriptions = new Set<string>()
 
-  const produce = async (topic: string, message: string): Promise<void> => {
-    try {
-      const { offset } = await producer.send({
-        topic: topic,
-        messages: [{ value: message }],
-      });
-      console.log(`Produced message to ${topic} with offset ${offset}`);
-    } catch (error) {
-      console.error(`Error producing message: ${error.message}`);
-    }
-  };
-
-  const subscribeAsGroupMember = async (topics: string[], callback: (message: KafkaMessage) => void): Promise<void> => {
-    for (const topic of topics) {
-      if (individualSubscriptions.has(topic)) {
-        throw new Error(`Topic '${topic}' is already subscribed as an individual`);
-      }
+    function produce (msg: string,
+                      topic: string,
+                      successCallback: VanillaCallback,
+                      errCallback: ErrCallback): void {
+        producer.send({
+          topic: topic,
+          messages: [{ value: msg }],
+        })
+        .then((offset: Number): void => { successCallback() })
+        .catch((error: Error): void => { errCallback(error) })
     }
 
-    try {
-      await consumer.subscribe({ topics, groupId: appGroup });
-      topics.forEach(topic => groupMemberSubscriptions.add(topic));
-      await consumer.run({
-        eachMessage: async ({ topic, partition, message }: EachMessagePayload) => {
-          callback({
-            topic,
-            partition,
-            offset: message.offset,
-            value: message.value.toString(),
-          });
+    function subscribeAsGroupMember (queues: string[],
+                                    successCallback: VanillaCallback,
+                                    errCallback: ErrCallback) : void {
+        for (const topic of queues) {
+            if (individualSubscriptions.has(topic)) {
+                errCallback(new Error(`Topic '${topic}' is already subscribed as an individual`))
+            }
+        }
+
+        consumer.subscribe({ queues, groupId: appGroup })
+        .then((): void => {
+            queues.forEach(queue => groupMemberSubscriptions.add(queue))
+            successCallback()
+        })
+        .catch((error: Error): void => { 
+            errCallback(error) 
+        })
+    }
+
+    function subscribeAsIndividual (queues: string[],
+                                    successCallback: VanillaCallback,
+                                    errCallback: ErrCallback) : void {
+        for (const topic of queues) {
+            if (groupMemberSubscriptions.has(topic)) {
+                errCallback(new Error(`Topic '${topic}' is already subscribed as a group`))
+            }
+        }
+
+        consumer.subscribe({ queues, groupId: appId })
+        .then((): void => {
+            queues.forEach(queue => groupMemberSubscriptions.add(queue))
+            successCallback()
+        })
+        .catch((error: Error): void => { 
+            errCallback(error) 
+        })
+    }
+
+    function unsubscribe (queues: string[],
+                        successCallback: VanillaCallback,
+                        errCallback: ErrCallback) : void {
+        consumer.unsubscribe({ queues })
+        .then(() => {
+            queues.forEach(topic => {
+                groupMemberSubscriptions.delete(topic)
+                individualSubscriptions.delete(topic)
+            })
+            successCallback()
+        })
+        .catch((error: Error): void => {
+            errCallback(error) 
+        })
+    }
+
+    consumer.run({
+        eachMessage: async ({ topic, partition, message, heartbeat, pause }) => {
+            messageCallback(topic, message)
         },
-      });
-      console.log(`Subscribed to topics: ${topics} as group member of ${appGroup}`);
-    } catch (error) {
-      console.error(`Error subscribing as group member: ${error.message}`);
-    }
-  };
-
-  const subscribeAsGroupIndividual = async (topics: string[], callback: (message: KafkaMessage) => void): Promise<void> => {
-    for (const topic of topics) {
-      if (groupMemberSubscriptions.has(topic)) {
-        throw new Error(`Topic '${topic}' is already subscribed as a group member`);
-      }
-    }
-
-    try {
-      await consumer.subscribe({ topics, groupId: appId });
-      topics.forEach(topic => individualSubscriptions.add(topic));
-      await consumer.run({
-        eachMessage: async ({ topic, partition, message }: EachMessagePayload) => {
-          callback({
-            topic,
-            partition,
-            offset: message.offset,
-            value: message.value.toString(),
-          });
-        },
-      });
-      console.log(`Subscribed to topics: ${topics} as individual member of ${appId}`);
-    } catch (error) {
-      console.error(`Error subscribing as individual member: ${error.message}`);
-    }
-  };
-
-  const unsubscribe = async (topics: string[]): Promise<void> => {
-    try {
-      await consumer.unsubscribe({ topics });
-      topics.forEach(topic => {
-        groupMemberSubscriptions.delete(topic);
-        individualSubscriptions.delete(topic);
-      });
-      console.log(`Unsubscribed from topics: ${topics}`);
-    } catch (error) {
-      console.error(`Error unsubscribing from topics: ${error.message}`);
-    }
-  };
-
-  try {
-    await producer.connect();
-    await consumer.connect();
-  } catch (error) {
-    throw new Error(`Failed to connect to Kafka cluster: ${error.message}`);
-  }
-
-  callback({produce,
-          subscribeAsGroupMember,
-          subscribeAsGroupIndividual,
-          unsubscribe});
-};
+    }).then(()=>{
+        queueUtilsCallback(
+            {
+                produce : produce,
+                consumeAsGroup: subscribeAsGroupMember,
+                consumeAsIndividual: subscribeAsIndividual,
+                unsubscribe : unsubscribe
+            }
+        )
+    }).catch((error: Error) => {
+        errCallback(error)
+    })
+}
