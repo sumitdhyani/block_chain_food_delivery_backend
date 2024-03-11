@@ -3,7 +3,7 @@ import { PubSubDataRouter } from "./PubSubDataRouter";
 type ResponseHandler<Response extends any[]> = (...response: Response) => void;
 type ReqListener<ReqData, Response extends any[]> = (reqData: ReqData, responseHandler: ResponseHandler<Response>) => void;
 
-class EndToEndReqRespRouter<ResponderId, ReqId, ReqData, Response extends any[]> {
+export class EndToEndReqRespRouter<ResponderId, ReqId, ReqData, Response extends any[]> {
     private reqRouter: PubSubDataRouter<ResponderId, number, [ReqData, ResponseHandler<Response>]>;
     private pendingreqIds: Set<ReqId>;
     private id : number;
