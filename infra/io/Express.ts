@@ -11,13 +11,13 @@ export function initExpress (port: number, logger: Logger, reqRespIOUtilsCallbac
     logger.info(`Server is listening on port ${port}`);
   });
 
-  let existingRoutes: Set<string> = new Set<string>();
-  function setRoute(route: string, reqHandler: ReqHandler, errCallback: ErrCallback) : void {
+  let existingGetRoutes: Set<string> = new Set<string>();
+  function setGetRoute(route: string, reqHandler: ReqHandler, errCallback: ErrCallback) : void {
     // Check if route is already set, if so, throw an error.
-    if( existingRoutes.has(route) ) {
-      errCallback(new Error("This route has already been set"))
+    if( existingGetRoutes.has(route) ) {
+      errCallback(new Error("This get route has already been set"))
     }
-    existingRoutes.add(route);
+    existingGetRoutes.add(route);
     // Define new route handler using reqHandler function.
     app.get(route, (req: Request, res: Response) => {
      // Call reqHandler with request's query, body, headers, and params.
@@ -26,5 +26,21 @@ export function initExpress (port: number, logger: Logger, reqRespIOUtilsCallbac
     })
   }
 
-  reqRespIOUtilsCallback({setRoute : setRoute})
+  let existingPostRoutes: Set<string> = new Set<string>();
+  function setPostRoute(route: string, reqHandler: ReqHandler, errCallback: ErrCallback) : void {
+    // Check if route is already set, if so, throw an error.
+    if( existingPostRoutes.has(route) ) {
+      errCallback(new Error("This get route has already been set"))
+    }
+    existingPostRoutes.add(route);
+    // Define new route handler using reqHandler function.
+    app.get(route, (req: Request, res: Response) => {
+     // Call reqHandler with request's query, body, headers, and params.
+     // Use resultHandler to send result back to client.
+     reqHandler(req.query, req.body, req.headers, req.params, (result: Object) => { res.send(result) })
+    })
+  }
+
+  reqRespIOUtilsCallback({setGetRoute : setGetRoute, setPostRoute : setPostRoute})
+
 }

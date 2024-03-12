@@ -24,7 +24,8 @@ export type QueueUtils = {
 
 export type ReqHandler = (queryParams: Object, body: Object, headers: Object, params: Object, resultHandler: (Object)=>void) => void;
 export type ReqRespIOUtils = {
-    setRoute: (route: string, reqHandler: ReqHandler, errCallback: ErrCallback) => void
+    setGetRoute: (route: string, reqHandler: ReqHandler, errCallback: ErrCallback) => void
+    setPostRoute: (route: string, reqHandler: ReqHandler, errCallback: ErrCallback) => void
 }
 
 export type ReqRespIOUtilsCallback = Callback<[ReqRespIOUtils]>
